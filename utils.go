@@ -3,13 +3,85 @@ package main
 // https://grugbrain.dev/
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/imroc/req/v3"
 )
+
+type ClientInfo struct {
+	Hostname string `json:"hostname"`
+	OS       string `json:"os"`
+	OSName   string `json:"os_name"`
+}
+
+func register(baseurl string) string {
+	log.Printf("%s", "Registering with server at "+baseurl)
+
+	var result struct {
+		AgentID string `json:"agent_id"`
+	}
+
+	client := req.C() // .DevMode()
+
+	resp, err := client.R().
+		SetBody(&ClientInfo{Hostname: GetHostname(), OS: runtime.GOOS, OSName: GetOSSubtype()}).
+		SetSuccessResult(&result).
+		Post(baseurl + "/register")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if !resp.IsSuccessState() {
+		// TODO: logger.fatal
+		fmt.Println("bad response status:", resp.Status)
+		fmt.Println("body:", resp.String())
+		log.Fatalf("register failed")
+		return "Failure"
+	}
+	// fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++")
+	// fmt.Printf("++++ agent_id: %s\n", result.AgentID)
+	// fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++")
+
+	return result.AgentID
+
+}
+
+func checkin(baseurl string, agentid string) string {
+	//log.Printf("Checking with server at " + baseurl)
+	client := req.C() // .DevMode()
+	var result struct {
+		Tasks string `json:"tasks"`
+	}
+	post, err := client.R().SetSuccessResult(result).Post(baseurl + "/checkin?agentid=" + agentid)
+	if err != nil {
+		log.Fatal(err)
+		return ""
+	}
+
+	if !post.IsSuccessState() {
+		// TODO: logger.fatal
+		fmt.Println("bad response status:", post.Status)
+		fmt.Println("body:", post.String())
+		log.Fatalf("register failed")
+		return "Failure"
+	}
+
+	return result.Tasks
+}
+
+func SaveAgentID(path string, id string) bool {
+	err := os.WriteFile(path, []byte(id), 0644)
+	if err != nil {
+		return false
+	}
+	return true
+}
 
 func GetCommandOutput(command []string) string {
 
@@ -28,19 +100,6 @@ func GetCommandOutput(command []string) string {
 
 }
 
-func GetHostIp() string {
-	switch runtime.GOOS {
-	case "windows":
-		log.Fatal("I haven't made this support Windows yet")
-	case "linux":
-		// TODO: gotta grep or something
-		// since ip a is suuuuuuper verbose??
-		return GetCommandOutput(strings.Split("ip a", " "))
-	}
-
-	return "{something went wrong}"
-}
-
 func GetHostname() string {
 	switch runtime.GOOS {
 	case "windows":
@@ -51,8 +110,6 @@ func GetHostname() string {
 
 	return "{something went wrong}"
 }
-
-// No need for get os family, since runtime.GOOS does that already!
 
 func GetOSSubtype() string {
 	switch runtime.GOOS {
