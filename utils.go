@@ -4,6 +4,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -63,6 +64,10 @@ func GetOSSubtype() string {
 		return res
 
 	case "linux":
+		if _, err := os.Stat("/etc/os-release"); err != nil {
+			// TODO: could try checking lsb release or redhat release
+			return "Uknown"
+		}
 		var glorp string = GetCommandOutput(strings.Split("cat /etc/os-release", " "))
 		var redistro = regexp.MustCompile(`(?m)\bNAME=\"\w*`)
 		var distro = strings.Replace(redistro.FindString(glorp), "NAME=\"", "", 1)
