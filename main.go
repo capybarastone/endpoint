@@ -39,7 +39,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		id = string(cont)
+		id = strings.TrimSpace(string(cont))
 	}
 
 	time.Sleep(pollingDelay)
@@ -51,11 +51,13 @@ func main() {
 
 		var res = checkin(server, id)
 
-		if strings.Compare(res, "") == 0 {
+		if len(res) == 0 {
 			log.Printf("No tasks found for me.")
 		} else {
 			log.Printf("Task found for me.")
-			log.Printf("Task information: " + res)
+			for i, task := range res {
+				log.Printf("Task %d: %s", i+1, formatTask(task))
+			}
 
 			// Now we'd have to decode the JSON of the tasks to do
 			// Which should have an ID and command(s) to run

@@ -17,7 +17,8 @@ type RegisterResult struct {
 	AgentID string `json:"agent_id"`
 }
 
-// TaskResult represents the tasks assigned to the client by the server. (not parsed)
-type TaskResult struct {
-	Tasks string `json:"tasks"`
-}
+// Task represents a task object returned by the server.
+type Task map[string]any
+
+// TaskResult represents the tasks assigned to the client by the server.
+type TaskResult []Task

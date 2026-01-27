@@ -47,7 +47,7 @@ func register(baseurl string) string {
 
 }
 
-func checkin(baseurl string, agentid string) string {
+func checkin(baseurl string, agentid string) TaskResult {
 	//log.Printf("Checking with server at " + baseurl)
 	client := req.C()
 	var result TaskResult
@@ -56,7 +56,7 @@ func checkin(baseurl string, agentid string) string {
 		Post(baseurl + "/checkin?agentid=" + agentid)
 	if err != nil {
 		log.Fatal(err)
-		return ""
+		return nil
 	}
 
 	if !post.IsSuccessState() {
@@ -64,10 +64,42 @@ func checkin(baseurl string, agentid string) string {
 		fmt.Println("bad response status:", post.Status)
 		fmt.Println("body:", post.String())
 		log.Fatalf("register failed")
-		return "Failure"
+		return nil
 	}
 
-	return result.Tasks
+	return result
+}
+
+func formatTask(task Task) string {
+	return fmt.Sprintf(
+		"id=%s assigned_at=%s instruction=%s arg=%s exit_code=%s stdout=%s stderr=%s stopped_processing_at=%s",
+		taskValue(task, "id"),
+		taskValue(task, "assigned_at"),
+		taskValue(task, "instruction"),
+		taskValue(task, "arg"),
+		taskValue(task, "exit_code"),
+		taskValue(task, "stdout"),
+		taskValue(task, "stderr"),
+		taskValue(task, "stopped_processing_at"),
+	)
+}
+
+func taskValue(task Task, key string) string {
+	val, ok := task[key]
+	if !ok || val == nil {
+		return "<nil>"
+	}
+	switch v := val.(type) {
+	case string:
+		return v
+	case float64:
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%d", int64(v))
+		}
+		return fmt.Sprintf("%f", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 func SaveAgentID(path string, id string) bool {
@@ -121,7 +153,7 @@ func GetOSSubtype() string {
 			return "Uknown"
 		}
 		var glorp string = GetCommandOutput(strings.Split("cat /etc/os-release", " "))
-		var redistro = regexp.MustCompile(`(?m)\bNAME=\"\w*`)
+		var redistro = regexp.MustCompile(`(?m)\bNAME="\w*`)
 		var distro = strings.Replace(redistro.FindString(glorp), "NAME=\"", "", 1)
 		var rerel = regexp.MustCompile(`(?m)\bBUILD_ID=\w*`)
 		var release = strings.Replace(rerel.FindString(glorp), "BUILD_ID=", "", 1)
