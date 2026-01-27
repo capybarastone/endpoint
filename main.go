@@ -9,7 +9,7 @@ import (
 )
 
 // TODO: client config file
-var server = "http://127.0.0.1:8443/api"
+var server = "http://127.0.0.1:8443/api/end/"
 var pollingDelay = 3 * time.Second
 
 func main() {
