@@ -22,7 +22,7 @@ func register(baseurl string) string {
 	client := req.C()
 	var result RegisterResult
 
-	var myInfo ClientInfo = ClientInfo{Hostname: GetHostname(), OS: runtime.GOOS, OSName: GetOSSubtype()}
+	var myInfo = ClientInfo{Hostname: GetHostname(), OS: runtime.GOOS, OSName: GetOSSubtype()}
 
 	resp, err := client.R().
 		SetBody(&myInfo).
@@ -53,7 +53,7 @@ func checkin(baseurl string, agentid string) TaskResult {
 	var result TaskResult
 	post, err := client.R().
 		SetSuccessResult(&result).
-		Post(baseurl + "/checkin?agentid=" + agentid)
+		Post(baseurl + "checkin?agentid=" + agentid)
 	if err != nil {
 		log.Fatal(err)
 		return nil
@@ -70,10 +70,33 @@ func checkin(baseurl string, agentid string) TaskResult {
 	return result
 }
 
+func submitTaskResult(baseurl string, agentID string, task Task) PostResultReply {
+	client := req.C()
+	var presult PostResultReply
+	payload := cloneTask(task)
+	payload["agent_id"] = agentID
+	post, err := client.R().
+		SetSuccessResult(&presult).
+		SetBody(&payload).
+		Post(baseurl + "post_result")
+	if err != nil {
+		log.Fatal(err)
+		return nil
+	}
+
+	if !post.IsSuccessState() {
+		fmt.Println("bad response status:", post.Status)
+		fmt.Println("body:", post.String())
+		log.Fatalf("status reply failed")
+	}
+
+	return presult
+}
+
 func formatTask(task Task) string {
 	return fmt.Sprintf(
-		"id=%s assigned_at=%s instruction=%s arg=%s exit_code=%s stdout=%s stderr=%s stopped_processing_at=%s",
-		taskValue(task, "id"),
+		"task_id=%s assigned_at=%s instruction=%s arg=%s exit_code=%s stdout=%s stderr=%s stopped_processing_at=%s responded=%s",
+		taskValue(task, "task_id"),
 		taskValue(task, "assigned_at"),
 		taskValue(task, "instruction"),
 		taskValue(task, "arg"),
@@ -81,6 +104,7 @@ func formatTask(task Task) string {
 		taskValue(task, "stdout"),
 		taskValue(task, "stderr"),
 		taskValue(task, "stopped_processing_at"),
+		taskValue(task, "responded"),
 	)
 }
 
@@ -97,9 +121,16 @@ func taskValue(task Task, key string) string {
 			return fmt.Sprintf("%d", int64(v))
 		}
 		return fmt.Sprintf("%f", v)
+	case bool:
+		return fmt.Sprintf("%t", v)
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+func updateTaskValue(task Task, key string, val any) Task {
+	task[key] = val
+	return task
 }
 
 func SaveAgentID(path string, id string) bool {
@@ -162,4 +193,12 @@ func GetOSSubtype() string {
 	}
 
 	return "{confused in this empty place}"
+}
+
+func cloneTask(task Task) Task {
+	result := make(Task, len(task))
+	for k, v := range task {
+		result[k] = v
+	}
+	return result
 }

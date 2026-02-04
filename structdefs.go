@@ -22,3 +22,5 @@ type Task map[string]any
 
 // TaskResult represents the tasks assigned to the client by the server.
 type TaskResult []Task
+
+type PostResultReply map[string]any

