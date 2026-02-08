@@ -59,13 +59,13 @@ func main() {
 	var fp = filepath.Join(dirname, ".agent_id")
 
 	_, err = os.Stat(fp)
-	var agent_id = ""
+	var agentId = ""
 
 	if os.IsNotExist(err) {
 		// No agent ID file
 		log.Printf("We have not previously registered on the server.")
-		agent_id = register(server)
-		SaveAgentID(fp, agent_id)
+		agentId = register(server)
+		SaveAgentID(fp, agentId)
 		log.Printf("We are now registered on the server.")
 	} else {
 		log.Printf("We have already registered on the server.")
@@ -73,17 +73,15 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		agent_id = strings.TrimSpace(string(cont))
+		agentId = strings.TrimSpace(string(cont))
 	}
 
 	time.Sleep(pollingDelay)
 
-	var running = true
-
-	for running {
+	for {
 		log.Printf("Checking for tasks.....")
 
-		var res = checkin(server, agent_id)
+		var res = checkin(server, agentId)
 
 		if len(res) == 0 {
 			log.Printf("No tasks found for me.")
@@ -92,18 +90,11 @@ func main() {
 			for i, task := range res {
 				log.Printf("Task %d: %s", i+1, formatTask(task))
 
-				if !processTask(server, agent_id, task) {
-					running = false
+				if !processTask(server, agentId, task) {
 					break
 				}
 			}
-
-			if !running {
-				break
-			}
-
 		}
-
 		time.Sleep(pollingDelay)
 	}
 
