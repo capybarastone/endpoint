@@ -141,29 +141,39 @@ func SaveAgentID(path string, id string) bool {
 	return true
 }
 
-func GetCommandOutput(command []string) string {
+func GetCommandOutput(command string) string {
+	var cmd *exec.Cmd
 
-	var prog string = command[0]
-	var rest []string = command[1:]
+	switch runtime.GOOS {
+	case "windows":
+		powershellPath, err := exec.LookPath("powershell")
+		if err != nil {
+			log.Fatalf("PowerShell not found: %v", err)
+		}
+		cmd = exec.Command(powershellPath, "-NoProfile", "-NonInteractive", "-Command", command)
+	default:
+		bashPath, err := exec.LookPath("bash")
+		if err != nil {
+			log.Fatalf("bash not found in PATH: %v", err)
+		}
+		cmd = exec.Command(bashPath, "-lc", command)
+	}
 
-	cmd := exec.Command(prog, strings.Join(rest, " "))
-
-	// Execute the command and capture its standard output
 	output, err := cmd.Output()
 	if err != nil {
-		log.Fatalf("Error executing command: %v", err)
+		log.Fatalf("Error executing `%s`: %v", command, err)
 	}
 
 	return string(output)
-
 }
 
 func GetHostname() string {
 	switch runtime.GOOS {
 	case "windows":
-		return GetCommandOutput(strings.Split("hostname", " "))
+		return GetCommandOutput("hostname")
 	case "linux":
-		return strings.TrimSpace(GetCommandOutput(strings.Split("cat /etc/hostname", " ")))
+		// TODO: error validation?
+		return strings.TrimSpace(GetCommandOutput("cat /etc/hostname"))
 	}
 
 	return "{something went wrong}"
@@ -172,7 +182,7 @@ func GetHostname() string {
 func GetOSSubtype() string {
 	switch runtime.GOOS {
 	case "windows":
-		var blorp string = GetCommandOutput(strings.Split("systeminfo | findstr /B /C:\"OS Name\" /C:\"OS Version\"", ""))
+		var blorp = GetCommandOutput("systeminfo | findstr /B /C:\"OS Name\" /C:\"OS Version\"")
 		var re = regexp.MustCompile(`(?m)\d\d \w\w\w`)
 		var res = re.FindString(blorp)
 
@@ -183,7 +193,7 @@ func GetOSSubtype() string {
 			// TODO: could try checking lsb release or redhat release
 			return "Uknown"
 		}
-		var glorp string = GetCommandOutput(strings.Split("cat /etc/os-release", " "))
+		var glorp string = GetCommandOutput("cat /etc/os-release")
 		var redistro = regexp.MustCompile(`(?m)\bNAME="\w*`)
 		var distro = strings.Replace(redistro.FindString(glorp), "NAME=\"", "", 1)
 		var rerel = regexp.MustCompile(`(?m)\bBUILD_ID=\w*`)
@@ -195,10 +205,67 @@ func GetOSSubtype() string {
 	return "{confused in this empty place}"
 }
 
+func GetCPUCores() string {
+	switch runtime.GOOS {
+	case "linux":
+		return GetCommandOutput("nproc")
+	case "windows":
+		// TODO: return format untested
+		// nproc equivalent would just be some INT number of cores
+		return GetCommandOutput("wmic cpu get NumberOfCores,NumberOfLogicalProcessors")
+	}
+
+	return ""
+}
+
+// TODO:
+// CPU usage???
+// X% in use
+
+func GetUsedMemory() string {
+	// TODO: goal is X G.B. of X G.B. total
+	// so that mgmt could parse into % free
+	switch runtime.GOOS {
+	case "linux":
+		// TODO: need to parse this
+		return GetCommandOutput("cat /proc/meminfo")
+	case "windows":
+		// TODO: I assume WMIC can do free memory?
+		// but also it seems to only sometimes be available?
+		return GetCommandOutput("wmic cpu get NumberOfCores")
+	}
+
+	return ""
+}
+
+func GetDiskUsage() string {
+	switch runtime.GOOS {
+	case "linux":
+		return GetCommandOutput("cat /proc/diskstats") // TODO: sh and then -> df | awk 'NR==2 {print $5}'
+	case "windows":
+		return GetCommandOutput("wmic disk get") // TODO: I dunno what to do for this one
+	}
+
+	return ""
+}
+
+// TODO: re-org this file or make category-specfic files?
+// IDK I could go either way
 func cloneTask(task Task) Task {
 	result := make(Task, len(task))
 	for k, v := range task {
 		result[k] = v
 	}
 	return result
+}
+
+func compileSystemInfo() HostInvetoryObject {
+	var myinfo = HostInvetoryObject{}
+	myinfo["hostname"] = GetHostname()
+	myinfo["os_string"] = runtime.GOOS + " " + GetOSSubtype()
+	myinfo["cpu_count"] = GetCPUCores()
+	myinfo["memory_use"] = GetUsedMemory()
+	myinfo["disk_usage"] = GetDiskUsage()
+
+	return myinfo
 }

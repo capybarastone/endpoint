@@ -24,3 +24,5 @@ type Task map[string]any
 type TaskResult []Task
 
 type PostResultReply map[string]any
+
+type HostInvetoryObject map[string]any
