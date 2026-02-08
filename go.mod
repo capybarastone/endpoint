@@ -2,7 +2,10 @@ module capyendpoint
 
 go 1.25.4
 
-require github.com/imroc/req/v3 v3.57.0
+require (
+	github.com/imroc/req/v3 v3.57.0
+	github.com/pelletier/go-toml/v2 v2.2.4
+)
 
 require (
 	github.com/andybalholm/brotli v1.2.0 // indirect

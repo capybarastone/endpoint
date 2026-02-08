@@ -6,13 +6,47 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
-// TODO: client config file
-var server = "http://127.0.0.1:8443/api/end/"
-var pollingDelay = 5 * time.Second
+type endpointConfig struct {
+	Server       string `toml:"server"`
+	PollingDelay string `toml:"pollingDelay"`
+}
+
+func loadConfig(path string) (string, time.Duration) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatalf("failed to read config file %s: %v", path, err)
+	}
+
+	var cfg endpointConfig
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		log.Fatalf("failed to parse config file %s: %v", path, err)
+	}
+
+	server := strings.TrimSpace(cfg.Server)
+	if server == "" {
+		log.Fatalf("config %s missing server value", path)
+	}
+
+	pollingDelayStr := strings.TrimSpace(cfg.PollingDelay)
+	if pollingDelayStr == "" {
+		log.Fatalf("config %s missing pollingDelay value", path)
+	}
+
+	pollingDelay, err := time.ParseDuration(pollingDelayStr)
+	if err != nil {
+		log.Fatalf("invalid pollingDelay in %s: %v", path, err)
+	}
+
+	return server, pollingDelay
+}
 
 func main() {
+	server, pollingDelay := loadConfig("config.toml")
+
 	log.Printf("The stones are capped.... Or whatever")
 	//log.Printf("We'll be connecting to " + server)
 	log.Printf("My hostname is " + GetHostname()) // Right now, on Windows we fail here (not exactly sure why. Didn't debug it for now)
