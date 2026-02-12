@@ -28,12 +28,14 @@ cmd_vet() {
 }
 
 cmd_test() {
+  # TODO: we don't have tests :c
   go test ./...
 }
 
 cmd_build() {
   mkdir -p "${BIN_DIR}"
   go build -o "${BIN_DIR}/${APP_NAME}" .
+  cp config.toml bin/
 }
 
 cmd_clean() {

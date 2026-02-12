@@ -49,7 +49,7 @@ func main() {
 
 	log.Printf("The stones are capped.... Or whatever")
 	//log.Printf("We'll be connecting to " + server)
-	log.Printf("My hostname is " + GetHostname()) // Right now, on Windows we fail here (not exactly sure why. Didn't debug it for now)
+	log.Printf("My hostname is %s", GetHostname()) // Right now, on Windows we fail here (not exactly sure why. Didn't debug it for now)
 
 	dirname, err := os.UserHomeDir()
 	if err != nil {

