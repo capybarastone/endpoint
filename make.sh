@@ -38,6 +38,12 @@ cmd_build() {
   cp config.toml bin/
 }
 
+cmd_build_win() {
+    mkdir -p "${BIN_DIR}"
+    GOOS=windows go build -o "${BIN_DIR}/${APP_NAME}.exe" .
+    cp config.toml bin/
+  }
+
 cmd_clean() {
   rm -rf "${BIN_DIR}"
 }
@@ -56,6 +62,7 @@ case "${COMMAND}" in
   vet) cmd_vet ;;
   test) cmd_test ;;
   build) cmd_build ;;
+  buildwin) cmd_build_win ;;
   clean) cmd_clean ;;
   all) cmd_all ;;
   -h|--help|help) usage ;;

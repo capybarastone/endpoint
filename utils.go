@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/imroc/req/v3"
@@ -54,8 +55,9 @@ func checkin(baseurl string, agentid string) TaskResult {
 	post, err := client.R().
 		SetSuccessResult(&result).
 		Post(baseurl + "checkin?agentid=" + agentid)
+
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		return nil
 	}
 
@@ -227,12 +229,40 @@ func GetUsedMemory() string {
 	// so that mgmt could parse into % free
 	switch runtime.GOOS {
 	case "linux":
-		// TODO: need to parse this
-		return GetCommandOutput("cat /proc/meminfo")
+		// prefer MemAvailable as a closer approximation to "free" memory
+		totalRaw := strings.TrimSpace(GetCommandOutput("awk '/^MemTotal:/ {print $2}' /proc/meminfo"))
+		availableRaw := strings.TrimSpace(GetCommandOutput("awk '/^MemAvailable:/ {print $2}' /proc/meminfo"))
+		if availableRaw == "" {
+			availableRaw = strings.TrimSpace(GetCommandOutput("awk '/^MemFree:/ {print $2}' /proc/meminfo"))
+		}
+
+		totalKB, err := strconv.ParseInt(totalRaw, 10, 64)
+		if err != nil || totalKB == 0 {
+			log.Printf("unable to parse MemTotal value %q: %v", totalRaw, err)
+			return ""
+		}
+
+		availableKB, err := strconv.ParseInt(availableRaw, 10, 64)
+		if err != nil {
+			log.Printf("unable to parse MemAvailable value %q: %v", availableRaw, err)
+			return ""
+		}
+
+		usedKB := totalKB - availableKB
+		if usedKB < 0 {
+			usedKB = 0
+		}
+
+		usedGB := float64(usedKB) / (1024 * 1024)
+		totalGB := float64(totalKB) / (1024 * 1024)
+		percentUsed := (float64(usedKB) / float64(totalKB)) * 100
+
+		return fmt.Sprintf("%.2f GB used of %.2f GB total (%.0f%%)", usedGB, totalGB, percentUsed)
+
 	case "windows":
 		// TODO: I assume WMIC can do free memory?
 		// but also it seems to only sometimes be available?
-		return GetCommandOutput("wmic cpu get NumberOfCores")
+		return "TODO"
 	}
 
 	return ""
@@ -241,7 +271,7 @@ func GetUsedMemory() string {
 func GetDiskUsage() string {
 	switch runtime.GOOS {
 	case "linux":
-		return GetCommandOutput("cat /proc/diskstats") // TODO: sh and then -> df | awk 'NR==2 {print $5}'
+		return GetCommandOutput("df | awk 'NR==2 {print $5}'")
 	case "windows":
 		return GetCommandOutput("wmic disk get") // TODO: I dunno what to do for this one
 	}
@@ -260,12 +290,12 @@ func cloneTask(task Task) Task {
 }
 
 func compileSystemInfo() HostInvetoryObject {
-	var myinfo = HostInvetoryObject{}
-	myinfo["hostname"] = GetHostname()
-	myinfo["os_string"] = runtime.GOOS + " " + GetOSSubtype()
-	myinfo["cpu_count"] = GetCPUCores()
-	myinfo["memory_use"] = GetUsedMemory()
-	myinfo["disk_usage"] = GetDiskUsage()
+	var myinfo = HostInvetoryObject{}                         // below assumptions for Linux only
+	myinfo["hostname"] = GetHostname()                        // should be good
+	myinfo["os_string"] = runtime.GOOS + " " + GetOSSubtype() // should be good?
+	myinfo["cpu_count"] = GetCPUCores()                       // should be good
+	myinfo["memory_use"] = GetUsedMemory()                    // should be good
+	myinfo["disk_usage"] = GetDiskUsage()                     // should be good
 
 	return myinfo
 }

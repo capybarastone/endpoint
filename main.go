@@ -95,6 +95,7 @@ func main() {
 				}
 			}
 		}
+
 		time.Sleep(pollingDelay)
 	}
 
