@@ -26,3 +26,11 @@ type TaskResult []Task
 type PostResultReply map[string]any
 
 type HostInvetoryObject map[string]any
+
+// EnrollResult is returned by the HTTP enrollment endpoint.
+type EnrollResult struct {
+	AgentID   string `json:"agent_id"`
+	CertPEM   string `json:"cert_pem"`
+	KeyPEM    string `json:"key_pem"`
+	CACertPEM string `json:"ca_cert_pem"`
+}

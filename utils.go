@@ -5,10 +5,13 @@ package main
 // but grug try best
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -17,15 +20,86 @@ import (
 	"github.com/imroc/req/v3"
 )
 
+// mtlsClient is initialised in main() after enrollment and used by all
+// subsequent requests. Using a package-level var avoids threading it through
+// every call site.
+var mtlsClient *req.Client
+
+// newMTLSClient builds a req.Client configured for mutual TLS using the cert
+// material written to disk during enrollment.
+func newMTLSClient(cfg endpointConfig) *req.Client {
+	caCertPEM, err := os.ReadFile(cfg.CACertFile)
+	if err != nil {
+		log.Fatalf("failed to read CA cert %s: %v", cfg.CACertFile, err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caCertPEM) {
+		log.Fatalf("failed to parse CA cert from %s", cfg.CACertFile)
+	}
+
+	cert, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.KeyFile)
+	if err != nil {
+		log.Fatalf("failed to load client cert/key: %v", err)
+	}
+
+	return req.C().SetTLSClientConfig(&tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      pool,
+	})
+}
+
+// enroll hits the plain-HTTP enrollment endpoint, saves the returned cert
+// material to disk, and returns the assigned agent ID.
+func enroll(cfg endpointConfig) string {
+	log.Printf("Enrolling with server at %s", cfg.EnrollServer)
+
+	// Plain HTTP client — this is the one unauthenticated request.
+	client := req.C()
+	var result EnrollResult
+
+	myInfo := ClientInfo{
+		Hostname: GetHostname(),
+		OS:       runtime.GOOS,
+		OSName:   GetOSSubtype(),
+	}
+
+	resp, err := client.R().
+		SetBody(&myInfo).
+		SetSuccessResult(&result).
+		Post(cfg.EnrollServer)
+	if err != nil {
+		log.Fatalf("enrollment request failed: %v", err)
+	}
+	if !resp.IsSuccessState() {
+		log.Fatalf("enrollment failed: %s — %s", resp.Status, resp.String())
+	}
+
+	// Persist cert material with restricted permissions.
+	for path, content := range map[string]string{
+		cfg.CertFile:   result.CertPEM,
+		cfg.KeyFile:    result.KeyPEM,
+		cfg.CACertFile: result.CACertPEM,
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			log.Fatalf("failed to create cert dir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			log.Fatalf("failed to write %s: %v", path, err)
+		}
+	}
+
+	log.Printf("Cert material saved to %s", filepath.Dir(cfg.CertFile))
+	return result.AgentID
+}
+
 func register(baseurl string) string {
 	log.Printf("%s", "Registering with server at "+baseurl)
 
-	client := req.C()
 	var result RegisterResult
 
 	var myInfo = ClientInfo{Hostname: GetHostname(), OS: runtime.GOOS, OSName: GetOSSubtype()}
 
-	resp, err := client.R().
+	resp, err := mtlsClient.R().
 		SetBody(&myInfo).
 		SetSuccessResult(&result).
 		Post(baseurl + "/register")
@@ -50,9 +124,8 @@ func register(baseurl string) string {
 
 func checkin(baseurl string, agentid string) TaskResult {
 	//log.Printf("Checking with server at " + baseurl)
-	client := req.C()
 	var result TaskResult
-	post, err := client.R().
+	post, err := mtlsClient.R().
 		SetSuccessResult(&result).
 		Post(baseurl + "checkin?agentid=" + agentid)
 
@@ -73,11 +146,10 @@ func checkin(baseurl string, agentid string) TaskResult {
 }
 
 func submitTaskResult(baseurl string, agentID string, task Task) PostResultReply {
-	client := req.C()
 	var presult PostResultReply
 	payload := cloneTask(task)
 	payload["agent_id"] = agentID
-	post, err := client.R().
+	post, err := mtlsClient.R().
 		SetSuccessResult(&presult).
 		SetBody(&payload).
 		Post(baseurl + "post_result")
