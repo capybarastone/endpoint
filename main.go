@@ -52,13 +52,13 @@ func loadConfig(path string) (herdagentConfig, time.Duration) {
 	}
 
 	if cfg.CertFile == "" {
-		cfg.CertFile = "certs/client.crt"
+		cfg.CertFile = "/etc/herd/client.crt"
 	}
 	if cfg.KeyFile == "" {
-		cfg.KeyFile = "certs/client.key"
+		cfg.KeyFile = "/etc/herd/client.key"
 	}
 	if cfg.CACertFile == "" {
-		cfg.CACertFile = "certs/ca.crt"
+		cfg.CACertFile = "/etc/herd/ca.crt"
 	}
 
 	return cfg, pollingDelay
@@ -83,6 +83,10 @@ func resolveConfigPath(flagPath string) string {
 }
 
 func main() {
+	if os.Getuid() != 0 {
+		log.Fatal("herd-agent must be run as root (required for /etc/herd cert permissions)")
+	}
+
 	configFlag := flag.String("c", "/etc/herd/config.toml", "path to config file")
 	flag.Parse()
 
