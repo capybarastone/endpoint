@@ -1,4 +1,4 @@
-module capyendpoint
+module herdagent
 
 go 1.25.4
 

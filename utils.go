@@ -27,7 +27,7 @@ var mtlsClient *req.Client
 
 // newMTLSClient builds a req.Client configured for mutual TLS using the cert
 // material written to disk during enrollment.
-func newMTLSClient(cfg endpointConfig) *req.Client {
+func newMTLSClient(cfg herdagentConfig) *req.Client {
 	caCertPEM, err := os.ReadFile(cfg.CACertFile)
 	if err != nil {
 		log.Fatalf("failed to read CA cert %s: %v", cfg.CACertFile, err)
@@ -50,7 +50,7 @@ func newMTLSClient(cfg endpointConfig) *req.Client {
 
 // enroll hits the plain-HTTP enrollment endpoint, saves the returned cert
 // material to disk, and returns the assigned agent ID.
-func enroll(cfg endpointConfig) string {
+func enroll(cfg herdagentConfig) string {
 	log.Printf("Enrolling with server at %s", cfg.EnrollServer)
 
 	// Plain HTTP client — this is the one unauthenticated request.

@@ -1,31 +1,32 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
 
-type endpointConfig struct {
+type herdagentConfig struct {
 	Server       string `toml:"server"`
 	EnrollServer string `toml:"enrollServer"`
 	PollingDelay string `toml:"pollingDelay"`
 	CertFile     string `toml:"certFile"`
 	KeyFile      string `toml:"keyFile"`
 	CACertFile   string `toml:"caCertFile"`
+	AgentID      string `toml:"agentID"`
 }
 
-func loadConfig(path string) (endpointConfig, time.Duration) {
+func loadConfig(path string) (herdagentConfig, time.Duration) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatalf("failed to read config file %s: %v", path, err)
 	}
 
-	var cfg endpointConfig
+	var cfg herdagentConfig
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		log.Fatalf("failed to parse config file %s: %v", path, err)
 	}
@@ -63,45 +64,57 @@ func loadConfig(path string) (endpointConfig, time.Duration) {
 	return cfg, pollingDelay
 }
 
+func saveConfig(path string, cfg herdagentConfig) {
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		log.Fatalf("failed to marshal config: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		log.Fatalf("failed to write config %s: %v", path, err)
+	}
+}
+
+func resolveConfigPath(flagPath string) string {
+	const localConfig = "config.toml"
+	if _, err := os.Stat(localConfig); err == nil {
+		return localConfig
+	}
+	return flagPath
+}
+
 func main() {
-	cfg, pollingDelay := loadConfig("config.toml")
+	configFlag := flag.String("c", "/etc/herd/config.toml", "path to config file")
+	flag.Parse()
+
+	configPath := resolveConfigPath(*configFlag)
+	cfg, pollingDelay := loadConfig(configPath)
 
 	log.Printf("The stones are capped.... Or whatever")
 	log.Printf("My hostname is %s", GetHostname())
 
-	dirname, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatal(err)
-	}
-	agentIDPath := filepath.Join(dirname, ".agent_id")
-
 	var agentID string
 
 	_, certErr := os.Stat(cfg.CertFile)
-	_, idErr := os.Stat(agentIDPath)
 
 	switch {
 	case os.IsNotExist(certErr):
 		// No cert on disk — enroll now over plain HTTP.
-		if !os.IsNotExist(idErr) {
-			log.Printf("Warning: agent_id file exists but cert is missing; re-enrolling")
+		if cfg.AgentID != "" {
+			log.Printf("Warning: agentID set in config but cert is missing; re-enrolling")
 		}
 		log.Printf("No client certificate found, enrolling...")
 		agentID = enroll(cfg)
-		SaveAgentID(agentIDPath, agentID)
+		cfg.AgentID = agentID
+		saveConfig(configPath, cfg)
 		log.Printf("Enrollment complete, agent ID: %s", agentID)
 
-	case os.IsNotExist(idErr):
+	case cfg.AgentID == "":
 		// Cert exists but no agent_id — something went wrong during a previous run.
-		log.Fatal("cert files exist but agent_id file is missing; delete certs/ and re-enroll")
+		log.Fatal("cert files exist but agentID is missing from config; delete certs/ and re-enroll")
 
 	default:
-		// Both cert and agent_id exist — normal startup.
-		raw, err := os.ReadFile(agentIDPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		agentID = strings.TrimSpace(string(raw))
+		// Both cert and agent_id present — normal startup.
+		agentID = cfg.AgentID
 		log.Printf("Using existing cert, agent ID: %s", agentID)
 	}
 
