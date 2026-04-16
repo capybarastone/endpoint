@@ -6,7 +6,7 @@ param(
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BinDir = Join-Path $RootDir "bin"
-$AppName = "capyendpoint"
+$AppName = "herdagent.exe"
 
 function Show-Usage {
     Write-Output @"

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -51,14 +52,21 @@ func loadConfig(path string) (herdagentConfig, time.Duration) {
 		log.Fatalf("invalid pollingDelay in %s: %v", path, err)
 	}
 
+	var basePath string
+	if runtime.GOOS == "windows" {
+		basePath = "C:\\herd\\"
+	} else {
+		basePath = "/etc/herd/"
+	}
+
 	if cfg.CertFile == "" {
-		cfg.CertFile = "/etc/herd/client.crt"
+		cfg.CertFile = basePath + "client.crt"
 	}
 	if cfg.KeyFile == "" {
-		cfg.KeyFile = "/etc/herd/client.key"
+		cfg.KeyFile = basePath + "client.key"
 	}
 	if cfg.CACertFile == "" {
-		cfg.CACertFile = "/etc/herd/ca.crt"
+		cfg.CACertFile = basePath + "ca.crt"
 	}
 
 	return cfg, pollingDelay
@@ -83,11 +91,20 @@ func resolveConfigPath(flagPath string) string {
 }
 
 func main() {
-	if os.Getuid() != 0 {
-		log.Fatal("herd-agent must be run as root (required for /etc/herd cert permissions)")
+
+	if runtime.GOOS != "windows" && os.Geteuid() == 0 {
+		log.Fatal("herd-agent should not be run as root (required for /etc/herd cert permissions)")
+		os.Exit(1)
 	}
 
-	configFlag := flag.String("c", "/etc/herd/config.toml", "path to config file")
+	var defPath string
+	if runtime.GOOS == "windows" {
+		defPath = "C:\\herd\\config.toml"
+	} else {
+		defPath = "/etc/herd/config.toml"
+	}
+
+	configFlag := flag.String("c", defPath, "path to config file")
 	flag.Parse()
 
 	configPath := resolveConfigPath(*configFlag)

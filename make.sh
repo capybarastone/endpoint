@@ -14,6 +14,7 @@ Commands:
   vet      Run go vet ./...
   test     Run go test ./...
   build    Build the project into ./bin
+  buildwin Build the project for Windows into ./bin
   clean    Remove ./bin
   install  Build and install herdagent to /usr/bin/herdagent and config to /etc/herd/config.toml
   all      Run format, vet, test, then build (default)
@@ -30,7 +31,8 @@ cmd_vet() {
 
 cmd_test() {
   # TODO: we don't have tests :c
-  go test ./...
+  # go test ./...
+  echo "No tests to run D:"
 }
 
 cmd_build() {
