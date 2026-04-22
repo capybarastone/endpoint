@@ -92,8 +92,8 @@ func resolveConfigPath(flagPath string) string {
 
 func main() {
 
-	if runtime.GOOS != "windows" && os.Geteuid() == 0 {
-		log.Fatal("herd-agent should not be run as root (required for /etc/herd cert permissions)")
+	if runtime.GOOS != "windows" && os.Geteuid() != 0 {
+		log.Fatal("herd-agent should be run as root (required for /etc/herd cert permissions)")
 		os.Exit(1)
 	}
 
