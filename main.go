@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -135,6 +136,8 @@ func main() {
 
 	_, certErr := os.Stat(cfg.CertFile)
 
+	agentIDFile := filepath.Join(filepath.Dir(cfg.CertFile), "agent_id")
+
 	switch {
 	case os.IsNotExist(certErr):
 		// No cert on disk — enroll now over plain HTTP.
@@ -145,11 +148,18 @@ func main() {
 		agentID = enroll(cfg)
 		cfg.AgentID = agentID
 		saveConfig(configPath, cfg)
+		SaveAgentID(agentIDFile, agentID)
 		log.Printf("Enrollment complete, agent ID: %s", agentID)
 
 	case cfg.AgentID == "":
-		// Cert exists but no agent_id — something went wrong during a previous run.
-		log.Fatal("cert files exist but agentID is missing from config; delete certs/ and re-enroll")
+		// Cert exists but agentID missing from config (e.g. config was overwritten by an update).
+		// Fall back to the agent_id file written alongside the certs.
+		data, err := os.ReadFile(agentIDFile)
+		if err != nil {
+			log.Fatalf("cert files exist but agentID is missing from config and %s is unreadable: %v; delete certs and re-enroll", agentIDFile, err)
+		}
+		agentID = strings.TrimSpace(string(data))
+		log.Printf("Recovered agent ID from %s: %s", agentIDFile, agentID)
 
 	default:
 		// Both cert and agent_id present — normal startup.
