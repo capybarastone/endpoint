@@ -6,6 +6,7 @@ name: Go Build
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch: 
 
 jobs:
 
@@ -31,4 +32,18 @@ jobs:
     - name: Upload exec
       uses: actions/upload-artifact@v7
       with:
-        path: bin/*
+        name: herdagent-linux
+        archive: false
+        path: bin/herdagent
+    - name: Upload exec (win)
+      uses: actions/upload-artifact@v7
+      with:
+        name: herdagent.exe
+        archive: false
+        path: bin/herdagent.exe
+    - name: Upload config
+      uses: actions/upload-artifact@v7
+      with:
+        name: config.toml
+        archive: false
+        path: bin/config.toml
