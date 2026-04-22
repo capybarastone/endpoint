@@ -11,6 +11,8 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+var verbose bool
+
 type herdagentConfig struct {
 	Server       string `toml:"server"`
 	EnrollServer string `toml:"enrollServer"`
@@ -61,12 +63,21 @@ func loadConfig(path string) (herdagentConfig, time.Duration) {
 
 	if cfg.CertFile == "" {
 		cfg.CertFile = basePath + "client.crt"
+		if verbose {
+			log.Printf("[verbose] certFile not set in config; using absolute path %s", cfg.CertFile)
+		}
 	}
 	if cfg.KeyFile == "" {
 		cfg.KeyFile = basePath + "client.key"
+		if verbose {
+			log.Printf("[verbose] keyFile not set in config; using absolute path %s", cfg.KeyFile)
+		}
 	}
 	if cfg.CACertFile == "" {
 		cfg.CACertFile = basePath + "ca.crt"
+		if verbose {
+			log.Printf("[verbose] caCertFile not set in config; using absolute path %s", cfg.CACertFile)
+		}
 	}
 
 	return cfg, pollingDelay
@@ -85,7 +96,13 @@ func saveConfig(path string, cfg herdagentConfig) {
 func resolveConfigPath(flagPath string) string {
 	const localConfig = "config.toml"
 	if _, err := os.Stat(localConfig); err == nil {
+		if verbose {
+			log.Printf("[verbose] found %s in CWD; using it instead of %s", localConfig, flagPath)
+		}
 		return localConfig
+	}
+	if verbose {
+		log.Printf("[verbose] no local config.toml found; using absolute path %s", flagPath)
 	}
 	return flagPath
 }
@@ -105,6 +122,7 @@ func main() {
 	}
 
 	configFlag := flag.String("c", defPath, "path to config file")
+	flag.BoolVar(&verbose, "verbose", false, "log when absolute paths are used instead of CWD")
 	flag.Parse()
 
 	configPath := resolveConfigPath(*configFlag)
