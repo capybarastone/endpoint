@@ -37,13 +37,13 @@ cmd_test() {
 
 cmd_build() {
   mkdir -p "${BIN_DIR}"
-  go build -o "${BIN_DIR}/${APP_NAME}" .
+  go build -buildvcs=false -o "${BIN_DIR}/${APP_NAME}" .
   cp config.toml bin/
 }
 
 cmd_build_win() {
     mkdir -p "${BIN_DIR}"
-    GOOS=windows go build -o "${BIN_DIR}/${APP_NAME}.exe" .
+    GOOS=windows go build -buildvcs=false -o "${BIN_DIR}/${APP_NAME}.exe" .
     cp config.toml bin/
   }
 
