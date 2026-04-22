@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/imroc/req/v3"
 )
@@ -244,9 +245,8 @@ func GetCommandOutput(command string) string {
 func GetHostname() string {
 	switch runtime.GOOS {
 	case "windows":
-		return GetCommandOutput("hostname")
+		return strings.TrimSpace(GetCommandOutput("hostname"))
 	case "linux":
-		// TODO: error validation?
 		return strings.TrimSpace(GetCommandOutput("cat /etc/hostname"))
 	}
 
@@ -256,11 +256,7 @@ func GetHostname() string {
 func GetOSSubtype() string {
 	switch runtime.GOOS {
 	case "windows":
-		var blorp = GetCommandOutput("systeminfo | findstr /B /C:\"OS Name\" /C:\"OS Version\"")
-		var re = regexp.MustCompile(`(?m)\d\d \w\w\w`)
-		var res = re.FindString(blorp)
-
-		return res
+		return strings.TrimSpace(GetCommandOutput("(Get-CimInstance Win32_OperatingSystem).Caption"))
 
 	case "linux":
 		if _, err := os.Stat("/etc/os-release"); err != nil {
@@ -284,9 +280,7 @@ func GetCPUCores() string {
 	case "linux":
 		return GetCommandOutput("nproc")
 	case "windows":
-		// TODO: return format untested
-		// nproc equivalent would just be some INT number of cores
-		return GetCommandOutput("wmic cpu get NumberOfCores,NumberOfLogicalProcessors")
+		return strings.TrimSpace(GetCommandOutput("(Get-CimInstance Win32_Processor | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum"))
 	}
 
 	return ""
@@ -332,9 +326,13 @@ func GetUsedMemory() string {
 		return fmt.Sprintf("%.2f GB used of %.2f GB total (%.0f%%)", usedGB, totalGB, percentUsed)
 
 	case "windows":
-		// TODO: I assume WMIC can do free memory?
-		// but also it seems to only sometimes be available?
-		return "TODO"
+		ps := `$os = Get-CimInstance Win32_OperatingSystem; ` +
+			`$total = $os.TotalVisibleMemorySize; $free = $os.FreePhysicalMemory; ` +
+			`$used = $total - $free; ` +
+			`$usedGB = [math]::Round($used/1MB, 2); $totalGB = [math]::Round($total/1MB, 2); ` +
+			`$pct = [math]::Round($used/$total*100, 0); ` +
+			`"$usedGB GB used of $totalGB GB total ($pct%)"`
+		return strings.TrimSpace(GetCommandOutput(ps))
 	}
 
 	return ""
@@ -345,14 +343,59 @@ func GetDiskUsage() string {
 	case "linux":
 		return GetCommandOutput("df | awk 'NR==2 {print $5}'")
 	case "windows":
-		return GetCommandOutput("wmic disk get") // TODO: I dunno what to do for this one
+		return strings.TrimSpace(GetCommandOutput(`$d = Get-PSDrive C; [math]::Round($d.Used/($d.Used+$d.Free)*100,0).ToString() + "%"`))
 	}
 
 	return ""
 }
 
-// TODO: re-org this file or make category-specfic files?
-// IDK I could go either way
+func readProcStatCPU() (idle, total int64) {
+	data, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return
+	}
+	for _, line := range strings.SplitN(string(data), "\n", 2) {
+		if !strings.HasPrefix(line, "cpu ") {
+			continue
+		}
+		for i, f := range strings.Fields(line)[1:] {
+			v, _ := strconv.ParseInt(f, 10, 64)
+			total += v
+			if i == 3 || i == 4 { // idle + iowait
+				idle += v
+			}
+		}
+		return
+	}
+	return
+}
+
+func GetCPUUsage() string {
+	switch runtime.GOOS {
+	case "linux":
+		idle1, total1 := readProcStatCPU()
+		time.Sleep(200 * time.Millisecond)
+		idle2, total2 := readProcStatCPU()
+		totalDiff := total2 - total1
+		if totalDiff == 0 {
+			return ""
+		}
+		idleDiff := idle2 - idle1
+		pct := int64(100) - (idleDiff*100)/totalDiff
+		if pct < 0 {
+			pct = 0
+		}
+		return fmt.Sprintf("%d%%", pct)
+	case "windows":
+		raw := strings.TrimSpace(GetCommandOutput("(Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average"))
+		if raw == "" {
+			return ""
+		}
+		return raw + "%"
+	}
+	return ""
+}
+
 func cloneTask(task Task) Task {
 	result := make(Task, len(task))
 	for k, v := range task {
@@ -363,11 +406,12 @@ func cloneTask(task Task) Task {
 
 func compileSystemInfo() HostInvetoryObject {
 	var myinfo = HostInvetoryObject{}                         // below assumptions for Linux only
-	myinfo["hostname"] = GetHostname()                        // should be good
-	myinfo["os_string"] = runtime.GOOS + " " + GetOSSubtype() // should be good?
-	myinfo["cpu_count"] = GetCPUCores()                       // should be good
-	myinfo["memory_use"] = GetUsedMemory()                    // should be good
-	myinfo["disk_usage"] = GetDiskUsage()                     // should be good
+	myinfo["hostname"] = GetHostname()
+	myinfo["os_string"] = runtime.GOOS + " " + GetOSSubtype()
+	myinfo["cpu_count"] = GetCPUCores()
+	myinfo["cpu_usage"] = GetCPUUsage()
+	myinfo["memory_use"] = GetUsedMemory()
+	myinfo["disk_usage"] = GetDiskUsage()
 
 	return myinfo
 }
