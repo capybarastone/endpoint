@@ -396,6 +396,36 @@ func GetCPUUsage() string {
 	return ""
 }
 
+// runCommandSafe runs a shell command and returns output, exit code, and any exec error.
+// Unlike GetCommandOutput it does not fatalf on non-zero exit, which is needed for
+// commands like clamscan that use exit code 1 to signal findings rather than failure.
+func runCommandSafe(command string) (string, int, error) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		powershellPath, err := exec.LookPath("powershell")
+		if err != nil {
+			return "", -1, fmt.Errorf("powershell not found: %w", err)
+		}
+		cmd = exec.Command(powershellPath, "-NoProfile", "-NonInteractive", "-Command", command)
+	default:
+		bashPath, err := exec.LookPath("bash")
+		if err != nil {
+			return "", -1, fmt.Errorf("bash not found: %w", err)
+		}
+		cmd = exec.Command(bashPath, "-lc", command)
+	}
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return string(out), exitErr.ExitCode(), nil
+		}
+		return string(out), -1, err
+	}
+	return string(out), 0, nil
+}
+
 func cloneTask(task Task) Task {
 	result := make(Task, len(task))
 	for k, v := range task {
