@@ -39,6 +39,9 @@ func loadConfig(path string) (herdagentConfig, time.Duration) {
 	if cfg.Server == "" {
 		log.Fatalf("config %s missing server value", path)
 	}
+	if !strings.HasPrefix(cfg.Server, "https://") {
+		log.Fatalf("config %s: server must use https:// (got %q) — only enrollServer uses plain http", path, cfg.Server)
+	}
 
 	cfg.EnrollServer = strings.TrimSpace(cfg.EnrollServer)
 	if cfg.EnrollServer == "" {
